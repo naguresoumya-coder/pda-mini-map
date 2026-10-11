@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDA Mini Maps - Localized Campus Navigation</title>
+    
+    <!-- 1. Include Completely Free Map Layout Packages (Corrected Live Links) -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a1a1a; }
+        #map { height: 82vh; width: 100%; }
+        #dashboard { 
+            height: 18vh; padding: 15px; background: #222; box-shadow: 0 -4px 10px rgba(0,0,0,0.5);
+            text-align: center; box-sizing: border-box; color: #fff;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 16px; letter-spacing: 0.5px; color: #4CAF50; text-transform: uppercase; }
+        h2 { margin: 0 0 8px 0; font-size: 13px; color: #bbb; font-weight: normal; }
+        #route-output { margin: 0; font-size: 14px; font-weight: bold; color: #00E676; background: #333; padding: 8px; border-radius: 5px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <!-- Container where the Satellite Map loads -->
+    <div id="map"></div>
+
+    <!-- Bottom Status Panel -->
+    <div id="dashboard">
+        <h1>PDA Mini Maps</h1>
+        <h2>Real-Time Custom AI Campus Navigation (A* Engine)</h2>
+        <div id="route-output">Calculating optimal internal path...</div>
+    </div>
+
+    <script>
+        // 2. Precise Latitude & Longitude Coordinates for PDA Campus Landmarks
+        const campusNodes = {
+            'canteen':  { name: "P.D.C Canteen",          lat: 17.34560, lng: 76.84320 },
+            'library':  { name: "Central Library",        lat: 17.34590, lng: 76.84290 },
+            'corridor': { name: "Main Corridor Axis",     lat: 17.34600, lng: 76.84270 },
+            'cse_dept': { name: "CSE Department (Goal)",   lat: 17.34620, lng: 76.84250 }
+        };
+
+        // 3. Private Campus Graph Network (Real edge distances in meters)
+        const campusGraph = {
+            'canteen':  { 'library': 65, 'corridor': 110 },
+            'library':  { 'cse_dept': 45 },
+            'corridor': { 'cse_dept': 35 } 
+        };
+
+        // 4. Absolute Straight-Line Heuristics h(n) down to the Goal Node (CSE)
+        const heuristic = {
+            'canteen':  95,
+            'library':  40,
+            'corridor': 30,
+            'cse_dept': 0
+        };
+
+        // 5. Your A* Search Engine executing locally inside the browser
+        function calculateAStarPath(start, goal) {
+            let openSet = [{ node: start, path: [start], g: 0, f: heuristic[start] }];
+            let closedSet = new Set();
+
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => a.f - b.f);
+                let current = openSet.shift();
+                
+                if (closedSet.has(current.node)) continue;
+                closedSet.add(current.node);
+
+                if (current.node === goal) return current.path;
+
+                let neighbors = campusGraph[current.node] || {};
+                for (let neighbor in neighbors) {
+                    if (!closedSet.has(neighbor)) {
+                        let gScore = current.g + neighbors[neighbor];
+                        let fScore = gScore + heuristic[neighbor];
+                        openSet.push({ node: neighbor, path: [...current.path, neighbor], g: gScore, f: fScore });
+                    }
+                }
+            }
+            return null;
+        }
+
+        // 6. Initialize and Load the Free Satellite Map Canvas
+        function initMiniMap() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPosition = urlParams.get('start') || 'canteen';
+            const destination = 'cse_dept';
+
+            // Pivot camera anchor over the center of the campus layout
+            const map = L.map('map', {
+                center: [17.34590, 76.84290],
+                zoom: 19,
+                zoomControl: true,
+                attributionControl: false
+            });
+
+            // Load Free World Satellite Imagery Tiles directly from Esri ArcGIS Online
+           L.tileLayer('https://arcgisonline.com{z}/{y}/{x}', {
+                maxZoom: 19
+            }).addTo(map);
+
+            // Drop map pins for your landmarks with labels
+            Object.keys(campusNodes).forEach(key => {
+                const landmark = campusNodes[key];
+                L.marker([landmark.lat, landmark.lng])
+                    .addTo(map)
+                    .bindPopup(`<b>${landmark.name}</b>`)
+                    .openPopup();
+            });
+
+            // Run the internal A* routing engine
+            const optimizedRoute = calculateAStarPath(currentPosition, destination);
+
+            if (optimizedRoute) {
+                // Convert array names back into a format Leaflet understands: [lat, lng]
+                const drawCoordinates = optimizedRoute.map(nodeKey => [
+                    campusNodes[nodeKey].lat,
+                    campusNodes[nodeKey].lng
+                ]);
+
+                // Draw your mini-map's path indicator line right over the campus tiles
+                L.polyline(drawCoordinates, {
+                    color: '#00E676', // Fluorescent green path
+                    weight: 6,
+                    opacity: 1.0
+                }).addTo(map);
+
+                // Print the step-by-step guidance straight onto the user dashboard panel
+                const readablePath = optimizedRoute.map(n => campusNodes[n].name).join(" ➔ ");
+                document.getElementById("route-output").innerText = readablePath;
+            } else {
+                document.getElementById("route-output").innerText = "No internal connection found.";
+            }
+        }
+
+        // Trigger map generation on page load automatically
+        window.onload = initMiniMap;
+    </script>
+</body>
+</html>

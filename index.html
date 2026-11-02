@@ -8,10 +8,6 @@
     <!-- Leaflet CSS and JS CDN Links -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <!-- Pannellum 360 Viewer CDN Links -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
     
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a1a1a; overflow: hidden; }
@@ -46,17 +42,15 @@
             white-space: nowrap;
         }
 
-        /* Modal Overlay for 360 View & QR Code */
+        /* Modal Overlay for Photos & QR */
         #modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center;
         }
         #modal-content {
-            background: #252525; padding: 20px; border-radius: 8px; width: 650px; max-width: 90%;
+            background: #252525; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%;
             border: 1px solid #444; color: #fff; position: relative; text-align: center;
         }
-        #panorama { width: 100%; height: 350px; background: #000; border-radius: 4px; margin-top: 10px; display: none; }
-        .close-btn { position: absolute; top: 10px; right: 15px; background: #ff5252; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -101,40 +95,42 @@
                 </select>
             </div>
 
-            <button onclick="open360View()">360° View</button>
             <button onclick="openQRCodeModal()" style="background:#2196F3;">Mobile QR</button>
         </div>
     </div>
 
-    <!-- Modal Popup for 360 View & QR Prototype -->
+    <!-- Modal Popup for Photos & QR -->
     <div id="modal-overlay">
         <div id="modal-content">
-            <button class="close-btn" onclick="closeModal()">Close</button>
-            <h3 id="modal-title" style="margin-top:0; color:#4CAF50;">Interactive 360° Landmark View</h3>
+            <h3 id="modal-title" style="color: #4CAF50; margin-bottom: 10px;">Campus View</h3>
             
-            <!-- 360 Panorama Container -->
-            <div id="panorama"></div>
+            <!-- Dynamic Building Photo Element -->
+            <img id="modal-image" src="" alt="Campus Building" style="width: 100%; height: 320px; object-fit: cover; border-radius: 4px; display: none; margin-bottom: 15px;" />
+            
+            <!-- QR Container Element -->
+            <div id="qr-container" style="display: none; padding: 10px;">
+                <p style="color: #ccc; font-size: 13px; margin-bottom: 10px;">Scan this code to test on your mobile device:</p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://github.com" alt="QR Code" style="border-radius: 4px;" />
+            </div>
 
-            <!-- Mobile QR Container -->
-            <div id="qr-container" style="display:none; padding: 10px;">
-                <p style="color: #ccc; font-size: 13px; margin-bottom: 10px;">Scan this prototype mock-up QR code with your mobile device for field evaluation:</p>
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://pda-campus-navigator-prototype.local" alt="Prototype QR Code" style="border: 4px solid #fff; border-radius: 4px;"/>
+            <div>
+                <button onclick="closeModal()" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. Exact GPS Coordinates with verified active 360 panoramic URLs
+        // 1. Exact GPS Coordinates & Photo URLs for Campus Nodes
         const campusNodes = {
-            'main_gate':   { name: "Main Gate",           lat: 17.315551, lng: 76.833042, pano: "https://pannellum.org/images/alma.jpg" },
-            'canara_bank': { name: "Canara Bank",         lat: 17.314940, lng: 76.834240, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
-            'clock_tower': { name: "Clock Tower",         lat: 17.315180, lng: 76.834150, pano: "https://pannellum.org/images/bma-0.jpg" },
-            'cse_dept':    { name: "CSE Department",      lat: 17.315572, lng: 76.834229, pano: "https://pannellum.org/images/alma.jpg" },
-            'library':     { name: "PDA Library",         lat: 17.314671, lng: 76.834770, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
-            'mech_dept':   { name: "Mechanical Dept",     lat: 17.315307, lng: 76.835831, pano: "https://pannellum.org/images/bma-0.jpg" },
-            'ece_dept':    { name: "Electronics Dept",    lat: 17.315637, lng: 76.835071, pano: "https://pannellum.org/images/alma.jpg" },
-            'civil_dept':  { name: "Civil Dept",          lat: 17.314975, lng: 76.835164, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
-            'canteen':     { name: "College Canteen",     lat: 17.314597, lng: 76.835683, pano: "https://pannellum.org/images/bma-0.jpg" }
+            'main_gate':   { name: "Main Gate",           lat: 17.315551, lng: 76.833042, image: "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=600" },
+            'canara_bank': { name: "Canara Bank",         lat: 17.314940, lng: 76.834240, image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600" },
+            'clock_tower': { name: "Clock Tower",         lat: 17.315180, lng: 76.834150, image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=600" },
+            'cse_dept':    { name: "CSE Department",      lat: 17.315572, lng: 76.834229, image: "https://images.unsplash.com/photo-1562774053-701939374585?w=600" },
+            'library':     { name: "PDA Library",         lat: 17.314671, lng: 76.834770, image: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=600" },
+            'mech_dept':   { name: "Mechanical Dept",     lat: 17.315307, lng: 76.835831, image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600" },
+            'ece_dept':    { name: "Electronics Dept",    lat: 17.315637, lng: 76.835071, image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=600" },
+            'civil_dept':  { name: "Civil Dept",          lat: 17.314975, lng: 76.835164, image: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600" },
+            'canteen':     { name: "College Canteen",     lat: 17.314597, lng: 76.835683, image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600" }
         };
 
         // 2. Custom Polygon Boundaries for Campus Blocks
@@ -197,9 +193,9 @@
             return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000;
         }
 
-        let map, routeLayer = null, viewer360 = null;
+        let map, routeLayer = null;
 
-        // 5. Initialize Leaflet Satellite Map
+        // 5. Initialize Leaflet Satellite Map & Polygons with click-to-view photo bindings
         function initMap() {
             map = L.map('map', {
                 center: [17.31515, 76.83440],
@@ -222,6 +218,9 @@
                     fillColor: bldg.color,
                     fillOpacity: 0.45
                 }).addTo(map);
+
+                // Bind popup to show building photo option on click
+                polygon.bindPopup(`<b>${nodeInfo.name}</b><br><br><button onclick="showBuildingPhoto('${key}')" style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">View Photo</button>`);
 
                 polygon.bindTooltip(nodeInfo.name, {
                     permanent: true,
@@ -288,35 +287,22 @@
             }
         }
 
-        // 8. 360 Panoramic Viewer Linked to Selected Start Location
-        function open360View() {
-            const selectedLocation = document.getElementById('start-select').value;
-            const locationData = campusNodes[selectedLocation];
+        // 8. Show Building Photo Modal
+        function showBuildingPhoto(nodeKey) {
+            const node = campusNodes[nodeKey];
+            if (!node) return;
 
             document.getElementById('modal-overlay').style.display = 'flex';
-            document.getElementById('panorama').style.display = 'block';
+            document.getElementById('modal-image').style.display = 'block';
             document.getElementById('qr-container').style.display = 'none';
-            document.getElementById('modal-title').innerText = `360° View: ${locationData.name}`;
-
-            setTimeout(() => {
-                if (!viewer360) {
-                    viewer360 = pannellum.viewer('panorama', {
-                        "type": "equirectangular",
-                        "panorama": locationData.pano,
-                        "autoLoad": true,
-                        "compass": true
-                    });
-                } else {
-                    viewer360.setPanorama(locationData.pano);
-                    viewer360.resize();
-                }
-            }, 200);
+            document.getElementById('modal-title').innerText = "Campus View: " + node.name;
+            document.getElementById('modal-image').src = node.image;
         }
 
         // 9. Mobile QR Code Modal Control
         function openQRCodeModal() {
             document.getElementById('modal-overlay').style.display = 'flex';
-            document.getElementById('panorama').style.display = 'none';
+            document.getElementById('modal-image').style.display = 'none';
             document.getElementById('qr-container').style.display = 'block';
             document.getElementById('modal-title').innerText = "Mobile Prototype Evaluation QR";
         }

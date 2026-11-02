@@ -3,63 +3,239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDA Mini Maps - Localized Campus Navigation</title>
+    <title>PDA College Mini Map & Navigation Prototype</title>
     
-    <!-- 1. Include Completely Free Map Layout Packages (Corrected Live Links) -->
-    <link rel="stylesheet" href="https://unpkg.com" />
-    <script src="https://unpkg.com"></script>
+    <!-- Leaflet CSS and JS CDN Links -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Pannellum 360 Viewer CDN Links -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
     
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a1a1a; }
-        #map { height: 82vh; width: 100%; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a1a1a; overflow: hidden; }
+        #map { height: 78vh; width: 100%; }
+        
         #dashboard { 
-            height: 18vh; padding: 15px; background: #222; box-shadow: 0 -4px 10px rgba(0,0,0,0.5);
-            text-align: center; box-sizing: border-box; color: #fff;
+            height: 22vh; padding: 12px 20px; background: #1e1e1e; box-shadow: 0 -4px 15px rgba(0,0,0,0.6);
+            display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; color: #fff;
         }
-        h1 { margin: 0 0 5px 0; font-size: 16px; letter-spacing: 0.5px; color: #4CAF50; text-transform: uppercase; }
-        h2 { margin: 0 0 8px 0; font-size: 13px; color: #bbb; font-weight: normal; }
-        #route-output { margin: 0; font-size: 14px; font-weight: bold; color: #00E676; background: #333; padding: 8px; border-radius: 5px; display: inline-block; }
+        .left-panel { max-width: 50%; }
+        h1 { margin: 0 0 3px 0; font-size: 15px; letter-spacing: 0.5px; color: #4CAF50; text-transform: uppercase; }
+        h2 { margin: 0 0 8px 0; font-size: 12px; color: #aaa; font-weight: normal; }
+        #route-output { margin: 0; font-size: 13px; font-weight: bold; color: #00E676; background: #2a2a2a; padding: 6px 10px; border-radius: 4px; display: inline-block; border: 1px solid #444; }
+        
+        .right-panel { display: flex; gap: 15px; align-items: center; }
+        .control-group { background: #2a2a2a; padding: 8px 12px; border-radius: 6px; border: 1px solid #444; }
+        .control-group label { display: block; font-size: 10px; color: #aaa; margin-bottom: 3px; text-transform: uppercase; }
+        select { background: #333; color: #fff; border: 1px solid #555; padding: 5px; border-radius: 4px; font-size: 12px; outline: none; }
+        
+        button { background: #4CAF50; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
+        button:hover { background: #45a049; }
+
+        /* Permanent building label styling */
+        .building-label {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00E676;
+            color: #fff;
+            font-weight: bold;
+            padding: 2px 5px;
+            font-size: 10px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+
+        /* Modal Overlay for 360 View & QR Code */
+        #modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center;
+        }
+        #modal-content {
+            background: #252525; padding: 20px; border-radius: 8px; width: 650px; max-width: 90%;
+            border: 1px solid #444; color: #fff; position: relative; text-align: center;
+        }
+        #panorama { width: 100%; height: 350px; background: #000; border-radius: 4px; margin-top: 10px; display: none; }
+        .close-btn { position: absolute; top: 10px; right: 15px; background: #ff5252; color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <!-- Container where the Satellite Map loads -->
+    <!-- Main Satellite Map Container -->
     <div id="map"></div>
 
-    <!-- Bottom Status Panel -->
+    <!-- Control & Status Dashboard -->
     <div id="dashboard">
-        <h1>PDA Mini Maps</h1>
-        <h2>Real-Time Custom AI Campus Navigation (A* Engine)</h2>
-        <div id="route-output">Calculating optimal internal path...</div>
+        <div class="left-panel">
+            <h1>PDA College Mini Map Engine</h1>
+            <h2>A* Routing & Campus Spatial Navigator</h2>
+            <div id="route-output">Computing optimal path...</div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="control-group">
+                <label>Start Location</label>
+                <select id="start-select" onchange="updateRoute()">
+                    <option value="main_gate">Main Gate</option>
+                    <option value="canara_bank">Canara Bank</option>
+                    <option value="clock_tower">Clock Tower</option>
+                    <option value="cse_dept">CSE Department</option>
+                    <option value="library">PDA Library</option>
+                    <option value="mech_dept">Mechanical Dept</option>
+                    <option value="ece_dept">Electronics Dept</option>
+                    <option value="civil_dept">Civil Dept</option>
+                    <option value="canteen">College Canteen</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Destination</label>
+                <select id="dest-select" onchange="updateRoute()">
+                    <option value="cse_dept">CSE Department</option>
+                    <option value="library">PDA Library</option>
+                    <option value="mech_dept">Mechanical Dept</option>
+                    <option value="ece_dept">Electronics Dept</option>
+                    <option value="civil_dept">Civil Dept</option>
+                    <option value="canteen">College Canteen</option>
+                    <option value="clock_tower">Clock Tower</option>
+                </select>
+            </div>
+
+            <button onclick="open360View()">360° View</button>
+            <button onclick="openQRCodeModal()" style="background:#2196F3;">Mobile QR</button>
+        </div>
+    </div>
+
+    <!-- Modal Popup for 360 View & QR Prototype -->
+    <div id="modal-overlay">
+        <div id="modal-content">
+            <button class="close-btn" onclick="closeModal()">Close</button>
+            <h3 id="modal-title" style="margin-top:0; color:#4CAF50;">Interactive 360° Landmark View</h3>
+            
+            <!-- 360 Panorama Container -->
+            <div id="panorama"></div>
+
+            <!-- Mobile QR Container -->
+            <div id="qr-container" style="display:none; padding: 10px;">
+                <p style="color: #ccc; font-size: 13px; margin-bottom: 10px;">Scan this prototype mock-up QR code with your mobile device for field evaluation:</p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://pda-campus-navigator-prototype.local" alt="Prototype QR Code" style="border: 4px solid #fff; border-radius: 4px;"/>
+            </div>
+        </div>
     </div>
 
     <script>
-        // 2. Precise Latitude & Longitude Coordinates for PDA Campus Landmarks
+        // 1. Exact GPS Coordinates with verified active 360 panoramic URLs
         const campusNodes = {
-            'canteen':  { name: "P.D.C Canteen",          lat: 17.34560, lng: 76.84320 },
-            'library':  { name: "Central Library",        lat: 17.34590, lng: 76.84290 },
-            'corridor': { name: "Main Corridor Axis",     lat: 17.34600, lng: 76.84270 },
-            'cse_dept': { name: "CSE Department (Goal)",   lat: 17.34620, lng: 76.84250 }
+            'main_gate':   { name: "Main Gate",           lat: 17.315551, lng: 76.833042, pano: "https://pannellum.org/images/alma.jpg" },
+            'canara_bank': { name: "Canara Bank",         lat: 17.314940, lng: 76.834240, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
+            'clock_tower': { name: "Clock Tower",         lat: 17.315180, lng: 76.834150, pano: "https://pannellum.org/images/bma-0.jpg" },
+            'cse_dept':    { name: "CSE Department",      lat: 17.315572, lng: 76.834229, pano: "https://pannellum.org/images/alma.jpg" },
+            'library':     { name: "PDA Library",         lat: 17.314671, lng: 76.834770, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
+            'mech_dept':   { name: "Mechanical Dept",     lat: 17.315307, lng: 76.835831, pano: "https://pannellum.org/images/bma-0.jpg" },
+            'ece_dept':    { name: "Electronics Dept",    lat: 17.315637, lng: 76.835071, pano: "https://pannellum.org/images/alma.jpg" },
+            'civil_dept':  { name: "Civil Dept",          lat: 17.314975, lng: 76.835164, pano: "https://pannellum.org/images/cerro-toco-0.jpg" },
+            'canteen':     { name: "College Canteen",     lat: 17.314597, lng: 76.835683, pano: "https://pannellum.org/images/bma-0.jpg" }
         };
 
-        // 3. Private Campus Graph Network (Real edge distances in meters)
+        // 2. Custom Polygon Boundaries for Campus Blocks
+        const campusBuildings = {
+            'main_gate': {
+                coords: [[17.31560, 76.83310], [17.31560, 76.83298], [17.31550, 76.83298], [17.31550, 76.83310]],
+                color: "#FF9800"
+            },
+            'canara_bank': {
+                coords: [[17.31500, 76.83430], [17.31500, 76.83418], [17.31488, 76.83418], [17.31488, 76.83430]],
+                color: "#E91E63"
+            },
+            'clock_tower': {
+                coords: [[17.31523, 76.83420], [17.31523, 76.83410], [17.31513, 76.83410], [17.31513, 76.83420]],
+                color: "#9C27B0"
+            },
+            'cse_dept': {
+                coords: [[17.31564, 76.83430], [17.31564, 76.83416], [17.31550, 76.83416], [17.31550, 76.83430]],
+                color: "#4CAF50"
+            },
+            'library': {
+                coords: [[17.31474, 76.83485], [17.31474, 76.83469], [17.31460, 76.83469], [17.31460, 76.83485]],
+                color: "#2196F3"
+            },
+            'mech_dept': {
+                coords: [[17.31538, 76.83591], [17.31538, 76.83575], [17.31523, 76.83575], [17.31523, 76.83591]],
+                color: "#FF5722"
+            },
+            'ece_dept': {
+                coords: [[17.31571, 76.83515], [17.31571, 76.83499], [17.31557, 76.83499], [17.31557, 76.83515]],
+                color: "#00BCD4"
+            },
+            'civil_dept': {
+                coords: [[17.31505, 76.83524], [17.31505, 76.83508], [17.31490, 76.83508], [17.31490, 76.83524]],
+                color: "#8BC34A"
+            },
+            'canteen': {
+                coords: [[17.31467, 76.83576], [17.31467, 76.83560], [17.31453, 76.83560], [17.31453, 76.83576]],
+                color: "#FFEB3B"
+            }
+        };
+
+        // 3. Topological Graph (Walking Weights in Meters)
         const campusGraph = {
-            'canteen':  { 'library': 65, 'corridor': 110 },
-            'library':  { 'cse_dept': 45 },
-            'corridor': { 'cse_dept': 35 } 
+            'main_gate':   { 'clock_tower': 130, 'ece_dept': 220 },
+            'clock_tower': { 'main_gate': 130, 'canara_bank': 45, 'cse_dept': 40, 'ece_dept': 110 },
+            'canara_bank': { 'clock_tower': 45, 'library': 90, 'civil_dept': 110 },
+            'cse_dept':    { 'clock_tower': 40, 'ece_dept': 80, 'civil_dept': 120 },
+            'library':     { 'canara_bank': 90, 'civil_dept': 60, 'canteen': 110 },
+            'ece_dept':    { 'main_gate': 220, 'clock_tower': 110, 'cse_dept': 80, 'mech_dept': 120 },
+            'civil_dept':  { 'canara_bank': 110, 'cse_dept': 120, 'library': 60, 'canteen': 80 },
+            'mech_dept':   { 'ece_dept': 120, 'canteen': 140 },
+            'canteen':     { 'civil_dept': 80, 'library': 110, 'mech_dept': 140 }
         };
 
-        // 4. Absolute Straight-Line Heuristics h(n) down to the Goal Node (CSE)
-        const heuristic = {
-            'canteen':  95,
-            'library':  40,
-            'corridor': 30,
-            'cse_dept': 0
-        };
+        // 4. Heuristic Mapping for A*
+        function getHeuristic(node, goal) {
+            const latDiff = campusNodes[node].lat - campusNodes[goal].lat;
+            const lngDiff = campusNodes[node].lng - campusNodes[goal].lng;
+            return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000;
+        }
 
-        // 5. Your A* Search Engine executing locally inside the browser
+        let map, routeLayer = null, viewer360 = null;
+
+        // 5. Initialize Leaflet Satellite Map
+        function initMap() {
+            map = L.map('map', {
+                center: [17.31515, 76.83440],
+                zoom: 17.5,
+                zoomControl: true,
+                attributionControl: false
+            });
+
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: 'Tiles &copy; Esri'
+            }).addTo(map);
+
+            Object.keys(campusBuildings).forEach(key => {
+                const bldg = campusBuildings[key];
+                const nodeInfo = campusNodes[key];
+                const polygon = L.polygon(bldg.coords, {
+                    color: bldg.color,
+                    weight: 2,
+                    fillColor: bldg.color,
+                    fillOpacity: 0.45
+                }).addTo(map);
+
+                polygon.bindTooltip(nodeInfo.name, {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'building-label'
+                });
+            });
+
+            updateRoute();
+        }
+
+        // 6. A* Pathfinding Engine
         function calculateAStarPath(start, goal) {
-            let openSet = [{ node: start, path: [start], g: 0, f: heuristic[start] }];
+            let openSet = [{ node: start, path: [start], g: 0, f: getHeuristic(start, goal) }];
             let closedSet = new Set();
 
             while (openSet.length > 0) {
@@ -75,7 +251,7 @@
                 for (let neighbor in neighbors) {
                     if (!closedSet.has(neighbor)) {
                         let gScore = current.g + neighbors[neighbor];
-                        let fScore = gScore + heuristic[neighbor];
+                        let fScore = gScore + getHeuristic(neighbor, goal);
                         openSet.push({ node: neighbor, path: [...current.path, neighbor], g: gScore, f: fScore });
                     }
                 }
@@ -83,61 +259,73 @@
             return null;
         }
 
-        // 6. Initialize and Load the Free Satellite Map Canvas
-        function initMiniMap() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const currentPosition = urlParams.get('start') || 'canteen';
-            const destination = 'cse_dept';
+        // 7. Dynamic Route Renderer
+        function updateRoute() {
+            const start = document.getElementById('start-select').value;
+            const dest = document.getElementById('dest-select').value;
 
-            // Pivot camera anchor over the center of the campus layout
-            const map = L.map('map', {
-                center: [17.34590, 76.84290],
-                zoom: 19,
-                zoomControl: true,
-                attributionControl: false
-            });
+            if (routeLayer) map.removeLayer(routeLayer);
 
-            // Load Free World Satellite Imagery Tiles directly from Esri ArcGIS Online
-         L.tileLayer('https://arcgisonline.com{z}/{y}/{x}', {
-                maxZoom: 19
-            }).addTo(map);
+            const optimalPath = calculateAStarPath(start, dest);
 
-            // Drop map pins for your landmarks with labels
-            Object.keys(campusNodes).forEach(key => {
-                const landmark = campusNodes[key];
-                L.marker([landmark.lat, landmark.lng])
-                    .addTo(map)
-                    .bindPopup(`<b>${landmark.name}</b>`)
-                    .openPopup();
-            });
-
-            // Run the internal A* routing engine
-            const optimizedRoute = calculateAStarPath(currentPosition, destination);
-
-            if (optimizedRoute) {
-                // Convert array names back into a format Leaflet understands: [lat, lng]
-                const drawCoordinates = optimizedRoute.map(nodeKey => [
+            if (optimalPath) {
+                const latLngs = optimalPath.map(nodeKey => [
                     campusNodes[nodeKey].lat,
                     campusNodes[nodeKey].lng
                 ]);
 
-                // Draw your mini-map's path indicator line right over the campus tiles
-                L.polyline(drawCoordinates, {
-                    color: '#00E676', // Fluorescent green path
-                    weight: 6,
+                routeLayer = L.polyline(latLngs, {
+                    color: '#00E676',
+                    weight: 5,
+                    dashArray: '8, 8',
                     opacity: 1.0
                 }).addTo(map);
 
-                // Print the step-by-step guidance straight onto the user dashboard panel
-                const readablePath = optimizedRoute.map(n => campusNodes[n].name).join(" ➔ ");
-                document.getElementById("route-output").innerText = readablePath;
+                const readablePathText = optimalPath.map(n => campusNodes[n].name).join(" ➔ ");
+                document.getElementById("route-output").innerText = readablePathText;
             } else {
-                document.getElementById("route-output").innerText = "No internal connection found.";
+                document.getElementById("route-output").innerText = "No direct path network found.";
             }
         }
 
-        // Trigger map generation on page load automatically
-        window.onload = initMiniMap;
+        // 8. 360 Panoramic Viewer Linked to Selected Start Location
+        function open360View() {
+            const selectedLocation = document.getElementById('start-select').value;
+            const locationData = campusNodes[selectedLocation];
+
+            document.getElementById('modal-overlay').style.display = 'flex';
+            document.getElementById('panorama').style.display = 'block';
+            document.getElementById('qr-container').style.display = 'none';
+            document.getElementById('modal-title').innerText = `360° View: ${locationData.name}`;
+
+            setTimeout(() => {
+                if (!viewer360) {
+                    viewer360 = pannellum.viewer('panorama', {
+                        "type": "equirectangular",
+                        "panorama": locationData.pano,
+                        "autoLoad": true,
+                        "compass": true
+                    });
+                } else {
+                    viewer360.setPanorama(locationData.pano);
+                    viewer360.resize();
+                }
+            }, 200);
+        }
+
+        // 9. Mobile QR Code Modal Control
+        function openQRCodeModal() {
+            document.getElementById('modal-overlay').style.display = 'flex';
+            document.getElementById('panorama').style.display = 'none';
+            document.getElementById('qr-container').style.display = 'block';
+            document.getElementById('modal-title').innerText = "Mobile Prototype Evaluation QR";
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        window.onload = initMap;
     </script>
 </body>
 </html>

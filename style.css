@@ -40,3 +40,10 @@
     background: rgba(255, 255, 255, 0.95);
     border-radius: 6px;
 }
+/* Ensure popup images scale and fit properly */
+.leaflet-popup-content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}

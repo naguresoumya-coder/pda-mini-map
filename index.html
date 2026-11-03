@@ -20,7 +20,13 @@
         .left-panel { max-width: 50%; }
         h1 { margin: 0 0 3px 0; font-size: 15px; letter-spacing: 0.5px; color: #4CAF50; text-transform: uppercase; }
         h2 { margin: 0 0 8px 0; font-size: 12px; color: #aaa; font-weight: normal; }
-        #route-output { margin: 0; font-size: 13px; font-weight: bold; color: #00E676; background: #2a2a2a; padding: 6px 10px; border-radius: 4px; display: inline-block; border: 1px solid #444; }
+        
+        /* Scrollable and clean route output box */
+        #route-output { 
+            margin: 0; font-size: 12px; font-weight: bold; color: #00E676; background: #2a2a2a; 
+            padding: 8px 12px; border-radius: 4px; display: block; border: 1px solid #444; 
+            max-height: 110px; overflow-y: auto; line-height: 1.4;
+        }
         
         .right-panel { display: flex; gap: 15px; align-items: center; }
         .control-group { background: #2a2a2a; padding: 8px 12px; border-radius: 6px; border: 1px solid #444; }
@@ -51,16 +57,6 @@
             background: #252525; padding: 20px; border-radius: 8px; width: 600px; max-width: 90%;
             border: 1px solid #444; color: #fff; position: relative; text-align: center;
         }
-        /* Paste the code right here inside your style tags */
-        #route-output {
-            max-height: 250px;
-            overflow-y: auto;
-            background: white;
-            padding: 10px;
-            border-radius: 5px;
-        }
-    </style>
-</head>
     </style>
 </head>
 <body>
@@ -114,8 +110,8 @@
         <div id="modal-content">
             <h3 id="modal-title" style="color: #4CAF50; margin-bottom: 10px;">Campus View</h3>
             
-            <!-- Dynamic Building Photo Element -->
-            <img id="modal-image" src="" alt="Campus Building" style="width: 100%; height: 320px; object-fit: cover; border-radius: 4px; display: none; margin-bottom: 15px;" />
+            <!-- Dynamic Building Photo Element - object-fit: contain prevents cutting photos -->
+            <img id="modal-image" src="" alt="Campus Building" style="max-width: 100%; max-height: 320px; height: auto; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto 15px auto;" />
             
             <!-- QR Container Element -->
             <div id="qr-container" style="display: none; padding: 10px;">
@@ -196,16 +192,9 @@
             'canteen':     { 'civil_dept': 80, 'library': 110, 'mech_dept': 140 }
         };
 
-        // 4. Heuristic Mapping for A*
-        function getHeuristic(node, goal) {
-            const latDiff = campusNodes[node].lat - campusNodes[goal].lat;
-            const lngDiff = campusNodes[node].lng - campusNodes[goal].lng;
-            return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000;
-        }
-
         let map, routeLayer = null;
 
-        // 5. Initialize Leaflet Satellite Map & Polygons with click-to-view photo bindings
+        // 5. Initialize Leaflet Satellite Map & Polygons
         function initMap() {
             map = L.map('map', {
                 center: [17.31515, 76.83440],
@@ -229,7 +218,6 @@
                     fillOpacity: 0.45
                 }).addTo(map);
 
-                // Bind popup to show building photo option on click
                 polygon.bindPopup(`<b>${nodeInfo.name}</b><br><br><button onclick="showBuildingPhoto('${key}')" style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">View Photo</button>`);
 
                 polygon.bindTooltip(nodeInfo.name, {
@@ -242,33 +230,7 @@
             updateRoute();
         }
 
-        // 6. A* Pathfinding Engine
-        function calculateAStarPath(start, goal) {
-            let openSet = [{ node: start, path: [start], g: 0, f: getHeuristic(start, goal) }];
-            let closedSet = new Set();
-
-            while (openSet.length > 0) {
-                openSet.sort((a, b) => a.f - b.f);
-                let current = openSet.shift();
-                
-                if (closedSet.has(current.node)) continue;
-                closedSet.add(current.node);
-
-                if (current.node === goal) return current.path;
-
-                let neighbors = campusGraph[current.node] || {};
-                for (let neighbor in neighbors) {
-                    if (!closedSet.has(neighbor)) {
-                        let gScore = current.g + neighbors[neighbor];
-                        let fScore = gScore + getHeuristic(neighbor, goal);
-                        openSet.push({ node: neighbor, path: [...current.path, neighbor], g: gScore, f: fScore });
-                    }
-                }
-            }
-            return null;
-        }
-
-// 7. Multi-Path Evaluator & Optimal Route Renderer
+        // 7. Multi-Path Evaluator & Optimal Route Renderer
         function updateRoute() {
             const start = document.getElementById('start-select').value;
             const dest = document.getElementById('dest-select').value;
@@ -309,7 +271,7 @@
                 let optimalPath = null;
 
                 // Evaluate distance for every possible path
-                allPaths.forEach((pathOption, index) => {
+                allPaths.forEach((pathOption) => {
                     let dist = 0;
                     for (let i = 0; i < pathOption.length - 1; i++) {
                         dist += campusGraph[pathOption[i]][pathOption[i+1]];
@@ -322,7 +284,10 @@
                     pathDetails.push({ path: pathOption, distance: dist });
                 });
 
-                // Draw alternative paths in a subtle grey/blue color
+                // Sort paths by distance (shortest to longest)
+                pathDetails.sort((a, b) => a.distance - b.distance);
+
+                // Draw alternative paths in a subtle color
                 pathDetails.forEach(item => {
                     if (item.path !== optimalPath) {
                         const latLngs = item.path.map(n => [campusNodes[n].lat, campusNodes[n].lng]);
@@ -336,15 +301,15 @@
                 const optimalLatLngs = optimalPath.map(n => [campusNodes[n].lat, campusNodes[n].lng]);
                 routeLayer = L.polyline(optimalLatLngs, { color: '#00E676', weight: 6, dashArray: '8, 8', opacity: 1.0 }).addTo(map);
 
-                // Format output text showing all paths and their total distances
-                let outputHtml = "<b>Available Routes:</b><br>";
+                // Format output text showing all paths from first to last
+                let outputHtml = "<b>Available Routes (First to Last):</b><br>";
                 pathDetails.forEach((item, idx) => {
                     let readable = item.path.map(n => campusNodes[n].name).join(" ➔ ");
                     let isOpt = (item.path === optimalPath);
                     if (isOpt) {
                         outputHtml += `<span style="color: #00E676; font-weight: bold;">⭐ Optimal Path: ${readable} (${item.distance}m)</span><br>`;
                     } else {
-                        outputHtml += `<span style="color: #555;">Alternative ${idx + 1}: ${readable} (${item.distance}m)</span><br>`;
+                        outputHtml += `<span style="color: #bbb;">Alternative ${idx + 1}: ${readable} (${item.distance}m)</span><br>`;
                     }
                 });
 

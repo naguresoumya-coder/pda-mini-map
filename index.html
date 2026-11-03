@@ -258,32 +258,89 @@
             return null;
         }
 
-        // 7. Dynamic Route Renderer
+// 7. Multi-Path Evaluator & Optimal Route Renderer
         function updateRoute() {
             const start = document.getElementById('start-select').value;
             const dest = document.getElementById('dest-select').value;
 
             if (routeLayer) map.removeLayer(routeLayer);
+            if (window.allRouteLayers) {
+                window.allRouteLayers.forEach(layer => map.removeLayer(layer));
+            }
+            window.allRouteLayers = [];
 
-            const optimalPath = calculateAStarPath(start, dest);
+            // Helper to find all paths using DFS
+            function findAllPaths(current, destination, path = [], visited = new Set()) {
+                path.push(current);
+                visited.add(current);
+                
+                if (current === destination) {
+                    allPaths.push([...path]);
+                } else {
+                    const neighbors = campusGraph[current] ? Object.keys(campusGraph[current]) : [];
+                    for (let neighbor of neighbors) {
+                        if (!visited.has(neighbor)) {
+                            findAllPaths(neighbor, destination, path, visited);
+                        }
+                    }
+                }
+                path.pop();
+                visited.delete(current);
+            }
 
-            if (optimalPath) {
-                const latLngs = optimalPath.map(nodeKey => [
-                    campusNodes[nodeKey].lat,
-                    campusNodes[nodeKey].lng
-                ]);
+            let allPaths = [];
+            if (campusGraph[start] && campusGraph[dest]) {
+                findAllPaths(start, dest);
+            }
 
-                routeLayer = L.polyline(latLngs, {
-                    color: '#00E676',
-                    weight: 5,
-                    dashArray: '8, 8',
-                    opacity: 1.0
-                }).addTo(map);
+            if (allPaths.length > 0) {
+                let pathDetails = [];
+                let shortestDist = Infinity;
+                let optimalPath = null;
 
-                const readablePathText = optimalPath.map(n => campusNodes[n].name).join(" ➔ ");
-                document.getElementById("route-output").innerText = readablePathText;
+                // Evaluate distance for every possible path
+                allPaths.forEach((pathOption, index) => {
+                    let dist = 0;
+                    for (let i = 0; i < pathOption.length - 1; i++) {
+                        dist += campusGraph[pathOption[i]][pathOption[i+1]];
+                    }
+                    
+                    if (dist < shortestDist) {
+                        shortestDist = dist;
+                        optimalPath = pathOption;
+                    }
+                    pathDetails.push({ path: pathOption, distance: dist });
+                });
+
+                // Draw alternative paths in a subtle grey/blue color
+                pathDetails.forEach(item => {
+                    if (item.path !== optimalPath) {
+                        const latLngs = item.path.map(n => [campusNodes[n].lat, campusNodes[n].lng]);
+                        const altLayer = L.polyline(latLngs, { color: '#90CAF9', weight: 3, opacity: 0.6 });
+                        altLayer.addTo(map);
+                        window.allRouteLayers.push(altLayer);
+                    }
+                });
+
+                // Highlight the optimal path in bright green with dashed pattern
+                const optimalLatLngs = optimalPath.map(n => [campusNodes[n].lat, campusNodes[n].lng]);
+                routeLayer = L.polyline(optimalLatLngs, { color: '#00E676', weight: 6, dashArray: '8, 8', opacity: 1.0 }).addTo(map);
+
+                // Format output text showing all paths and their total distances
+                let outputHtml = "<b>Available Routes:</b><br>";
+                pathDetails.forEach((item, idx) => {
+                    let readable = item.path.map(n => campusNodes[n].name).join(" ➔ ");
+                    let isOpt = (item.path === optimalPath);
+                    if (isOpt) {
+                        outputHtml += `<span style="color: #00E676; font-weight: bold;">⭐ Optimal Path: ${readable} (${item.distance}m)</span><br>`;
+                    } else {
+                        outputHtml += `<span style="color: #555;">Alternative ${idx + 1}: ${readable} (${item.distance}m)</span><br>`;
+                    }
+                });
+
+                document.getElementById("route-output").innerHTML = outputHtml;
             } else {
-                document.getElementById("route-output").innerText = "No direct path network found.";
+                document.getElementById("route-output").innerText = "No route network found between selected points.";
             }
         }
 
